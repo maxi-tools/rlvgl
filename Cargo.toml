@@ -478,6 +478,11 @@ objc2-app-kit = "0.3.1"
 
 [workspace]
 members = ["core", "platform", "platform-esp32s3", "widgets", "ui", "api", "micropython", "fs-sim", "i18n", "examples/apps/demo", "chipdb/rlvgl-chips-stm", "chipdb/rlvgl-chips-nrf", "chipdb/rlvgl-chips-esp", "chipdb/rlvgl-chips-nxp", "chipdb/rlvgl-chips-silabs", "chipdb/rlvgl-chips-microchip", "chipdb/rlvgl-chips-renesas", "chipdb/rlvgl-chips-ti", "chipdb/rlvgl-chips-rp2040", "chips/stm/bsps", "rlvgl-decomp"]
+# platform-esp32s3 targets xtensa-esp32s3-none-elf and cannot build on the host. Exclude
+# it from default workspace commands so `cargo check --workspace` / `cargo clippy --workspace`
+# only operate on host-buildable crates. Build it explicitly with
+# `cargo build -p platform-esp32s3 --target xtensa-esp32s3-none-elf`.
+default-members = ["core", "platform", "widgets", "ui", "api", "micropython", "fs-sim", "i18n", "examples/apps/demo", "chipdb/rlvgl-chips-stm", "chipdb/rlvgl-chips-nrf", "chipdb/rlvgl-chips-esp", "chipdb/rlvgl-chips-nxp", "chipdb/rlvgl-chips-silabs", "chipdb/rlvgl-chips-microchip", "chipdb/rlvgl-chips-renesas", "chipdb/rlvgl-chips-ti", "chipdb/rlvgl-chips-rp2040", "chips/stm/bsps", "rlvgl-decomp"]
 ## duplicated non-target-specific stm32h7xx-hal removed; use the target-specific one above
 [target.'cfg(any(target_arch = "arm", target_os = "none"))'.dependencies.stm32-fmc]
 version = "0.3.2"

@@ -8,8 +8,8 @@ use esp_hal::dma::{Dma, DmaPriority, DmaRxBuf, DmaTxBuf};
 use esp_hal::dma_buffers;
 use esp_hal::gpio::{Level, Output};
 use esp_hal::prelude::*;
-use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_hal::spi::SpiMode;
+use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_println::println;
 
 use rlvgl_core::widget::{Color, Rect};

@@ -129,6 +129,22 @@ where
             log::error!("Esp32s3Display::set_window failed: {:?}", e);
             return;
         }
+        // Guard against a caller-supplied buffer that does not match the
+        // window we just programmed: streaming a mismatched pixel count
+        // would either truncate the frame or run past the window and
+        // corrupt subsequent ST7789 state. Reject and surface the error
+        // rather than silently producing a bad frame.
+        let expected_pixels = (area.width as usize).saturating_mul(area.height as usize);
+        if colors.len() != expected_pixels {
+            log::error!(
+                "Esp32s3Display::flush pixel-count mismatch: window {}x{} = {} pixels, got {}",
+                area.width,
+                area.height,
+                expected_pixels,
+                colors.len()
+            );
+            return;
+        }
         // 320 RGB565 pixels = 640 bytes. Sized to fit comfortably in a single
         // SPI DMA descriptor transfer on the ESP32-S3 while keeping stack use
         // small. Increase only if the configured DMA buffers also grow.
@@ -147,7 +163,11 @@ where
 
             if i >= buf.len() {
                 if let Err(e) = self.interface.send_data(DataFormat::U8(&buf[..i])) {
-                    log::warn!("Esp32s3Display::flush send_data ({} bytes) failed: {:?}", i, e);
+                    log::warn!(
+                        "Esp32s3Display::flush send_data ({} bytes) failed: {:?}",
+                        i,
+                        e
+                    );
                     return;
                 }
                 i = 0;
@@ -155,7 +175,11 @@ where
         }
         if i > 0 {
             if let Err(e) = self.interface.send_data(DataFormat::U8(&buf[..i])) {
-                log::warn!("Esp32s3Display::flush send_data tail ({} bytes) failed: {:?}", i, e);
+                log::warn!(
+                    "Esp32s3Display::flush send_data tail ({} bytes) failed: {:?}",
+                    i,
+                    e
+                );
             }
         }
     }
