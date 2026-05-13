@@ -21,3 +21,6 @@ cookies.txt
 tmp/
 **/.cache/
 i18n/translations.bin
+
+# Local MCP server config used by maxi-agent-runner worktrees
+.mcp.json
