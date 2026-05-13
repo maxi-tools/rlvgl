@@ -6,8 +6,9 @@ Provides:
 
 - `Esp32s3Display` — ST7789 SPI-DMA driver wired to `display-interface-spi`.
   Implements the shared `rlvgl_platform::display::DisplayDriver` trait. The
-  driver wraps a configured `esp_hal::spi::master::SpiDma` instance plus a
-  D/C output pin, and exposes an `init()` helper that runs the standard
+  driver wraps any `embedded_hal::spi::SpiDevice` (the `aibi_face_demo`
+  example wires up an `esp-hal` `SpiDmaBus` via `embedded-hal-bus`'s
+  `ExclusiveDevice`) plus a D/C output pin, and exposes an `init()` helper that runs the standard
   ST7789 software bring-up (SWRESET → SLPOUT → COLMOD RGB565 → MADCTL →
   INVON → NORON → DISPON).
 - `Esp32s3Input` — explicit no-op input device stub. `poll()` always returns
@@ -34,7 +35,7 @@ your board exposes a controllable backlight rail.
 
 ## Building the example
 
-```
+```shell
 cargo build --release \
     -p rlvgl-platform-esp32s3 \
     --example aibi_face_demo \

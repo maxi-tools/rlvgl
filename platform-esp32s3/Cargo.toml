@@ -23,6 +23,7 @@ log = "0.4"
 [dev-dependencies]
 esp-backtrace = { version = "0.14", features = ["esp32s3", "panic-handler", "exception-handler", "println"] }
 esp-println = { version = "0.12", features = ["esp32s3", "log"] }
+embedded-hal-bus = "0.2"
 
 [[example]]
 name = "aibi_face_demo"

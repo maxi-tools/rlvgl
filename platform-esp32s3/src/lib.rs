@@ -7,35 +7,38 @@ pub use rlvgl_platform::input::InputDevice;
 
 use display_interface::{DataFormat, WriteOnlyDataCommand};
 use display_interface_spi::SPIInterface;
-use esp_hal::gpio::Output;
-use esp_hal::spi::master::SpiDma;
-use esp_hal::spi::FullDuplexMode;
+use embedded_hal::digital::OutputPin;
+use embedded_hal::spi::SpiDevice;
 
-/// ESP32-S3 Display driver using SPI DMA targeting an ST7789 panel.
-pub struct Esp32s3Display<'d, SPI>
+/// ESP32-S3 Display driver targeting an ST7789 panel over SPI.
+///
+/// The driver is generic over any `embedded_hal::spi::SpiDevice` and
+/// `embedded_hal::digital::OutputPin` so that the caller can wire it up to
+/// either a plain blocking SPI bus or an esp-hal `SpiDmaBus` wrapped in an
+/// `ExclusiveDevice`. Decoupling from concrete esp-hal types keeps the lib
+/// stable across HAL revisions; see the `aibi_face_demo` example for a
+/// reference DMA wiring.
+pub struct Esp32s3Display<SPI, DC>
 where
-    SPI: esp_hal::spi::master::InstanceDma,
+    SPI: SpiDevice,
+    DC: OutputPin,
 {
-    interface: SPIInterface<SpiDma<'d, SPI, FullDuplexMode>, Output<'d>>,
+    interface: SPIInterface<SPI, DC>,
     width: u16,
     height: u16,
 }
 
-impl<'d, SPI> Esp32s3Display<'d, SPI>
+impl<SPI, DC> Esp32s3Display<SPI, DC>
 where
-    SPI: esp_hal::spi::master::InstanceDma,
+    SPI: SpiDevice,
+    DC: OutputPin,
 {
-    /// Wrap a configured SPI DMA channel + D/C pin.
+    /// Wrap a configured SPI device + D/C pin.
     ///
     /// Call [`Esp32s3Display::init`] after the panel's hardware reset has
     /// settled in order to drive the ST7789 out of sleep and into 16-bit
     /// color mode before issuing any `flush` calls.
-    pub fn new(
-        spi: SpiDma<'d, SPI, FullDuplexMode>,
-        dc: Output<'d>,
-        width: u16,
-        height: u16,
-    ) -> Self {
+    pub fn new(spi: SPI, dc: DC, width: u16, height: u16) -> Self {
         let interface = SPIInterface::new(spi, dc);
         Self {
             interface,
@@ -116,9 +119,10 @@ where
     }
 }
 
-impl<'d, SPI> DisplayDriver for Esp32s3Display<'d, SPI>
+impl<SPI, DC> DisplayDriver for Esp32s3Display<SPI, DC>
 where
-    SPI: esp_hal::spi::master::InstanceDma,
+    SPI: SpiDevice,
+    DC: OutputPin,
 {
     fn flush(&mut self, area: Rect, colors: &[Color]) {
         if let Err(e) = self.set_window(area) {
