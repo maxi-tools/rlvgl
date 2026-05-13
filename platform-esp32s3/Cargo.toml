@@ -8,7 +8,12 @@ description = "ESP32-S3 platform implementation for rlvgl."
 readme = "README.md"
 publish = false
 
-[dependencies]
+# The crate body is cfg-gated to `target_arch = "xtensa"` in `src/lib.rs`,
+# so the embedded-only dependency stack is also target-gated here. This
+# keeps the workspace host-buildable (no Xtensa toolchain / nightly needed
+# for `cargo check --workspace` or pre-commit hooks) while still pulling
+# the full driver dependencies on `--target xtensa-esp32s3-none-elf`.
+[target.'cfg(target_arch = "xtensa")'.dependencies]
 rlvgl-core = { path = "../core", default-features = false }
 rlvgl-platform = { path = "../platform", default-features = false }
 esp-hal = { version = "0.22", features = ["esp32s3"] }

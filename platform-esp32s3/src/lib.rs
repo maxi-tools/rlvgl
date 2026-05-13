@@ -1,5 +1,13 @@
 #![no_std]
 
+// The crate body targets `xtensa-esp32s3-none-elf` only. On any other target
+// (notably the host toolchain used by `cargo check --workspace` and
+// pre-commit hooks) compile down to an empty crate so the workspace can be
+// validated without the Xtensa toolchain installed. Build the real driver
+// with `cargo build -p rlvgl-platform-esp32s3 --target xtensa-esp32s3-none-elf`.
+#[cfg(target_arch = "xtensa")]
+mod imp {
+
 use rlvgl_core::event::Event;
 use rlvgl_core::widget::{Color, Rect};
 pub use rlvgl_platform::display::DisplayDriver;
@@ -211,3 +219,8 @@ impl InputDevice for Esp32s3Input {
         None
     }
 }
+
+}
+
+#[cfg(target_arch = "xtensa")]
+pub use imp::*;
