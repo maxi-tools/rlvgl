@@ -1,0 +1,38 @@
+[package]
+name = "rlvgl-platform-esp32s3"
+version = "0.1.0"
+authors = ["Maxi <maxi@aibi-libre.io>"]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "ESP32-S3 platform implementation for rlvgl."
+readme = "README.md"
+publish = false
+
+# The crate body is cfg-gated to `target_arch = "xtensa"` in `src/lib.rs`,
+# so the embedded-only dependency stack is also target-gated here. This
+# keeps the workspace host-buildable (no Xtensa toolchain / nightly needed
+# for `cargo check --workspace` or pre-commit hooks) while still pulling
+# the full driver dependencies on `--target xtensa-esp32s3-none-elf`.
+[target.'cfg(target_arch = "xtensa")'.dependencies]
+rlvgl-core = { path = "../core", default-features = false }
+rlvgl-platform = { path = "../platform", default-features = false }
+esp-hal = { version = "0.22", features = ["esp32s3"] }
+embedded-hal = "1.0"
+embedded-hal-async = "1.0"
+display-interface = "0.5"
+display-interface-spi = "0.5"
+log = "0.4"
+
+# Runtime support crates needed by the `aibi_face_demo` example. They live in
+# dev-dependencies because the library itself stays panic/println agnostic.
+[dev-dependencies]
+esp-backtrace = { version = "0.14", features = ["esp32s3", "panic-handler", "exception-handler", "println"] }
+esp-println = { version = "0.12", features = ["esp32s3", "log"] }
+embedded-hal-bus = "0.2"
+
+[[example]]
+name = "aibi_face_demo"
+required-features = []
+
+[features]
+default = []

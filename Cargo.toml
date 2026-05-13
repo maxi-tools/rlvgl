@@ -477,7 +477,7 @@ objc2-foundation = "0.3.1"
 objc2-app-kit = "0.3.1"
 
 [workspace]
-members = ["core", "platform", "widgets", "ui", "api", "micropython", "fs-sim", "i18n", "examples/apps/demo", "chipdb/rlvgl-chips-stm", "chipdb/rlvgl-chips-nrf", "chipdb/rlvgl-chips-esp", "chipdb/rlvgl-chips-nxp", "chipdb/rlvgl-chips-silabs", "chipdb/rlvgl-chips-microchip", "chipdb/rlvgl-chips-renesas", "chipdb/rlvgl-chips-ti", "chipdb/rlvgl-chips-rp2040", "chips/stm/bsps", "rlvgl-decomp"]
+members = ["core", "platform", "platform-esp32s3", "widgets", "ui", "api", "micropython", "fs-sim", "i18n", "examples/apps/demo", "chipdb/rlvgl-chips-stm", "chipdb/rlvgl-chips-nrf", "chipdb/rlvgl-chips-esp", "chipdb/rlvgl-chips-nxp", "chipdb/rlvgl-chips-silabs", "chipdb/rlvgl-chips-microchip", "chipdb/rlvgl-chips-renesas", "chipdb/rlvgl-chips-ti", "chipdb/rlvgl-chips-rp2040", "chips/stm/bsps", "rlvgl-decomp"]
 ## duplicated non-target-specific stm32h7xx-hal removed; use the target-specific one above
 [target.'cfg(any(target_arch = "arm", target_os = "none"))'.dependencies.stm32-fmc]
 version = "0.3.2"
