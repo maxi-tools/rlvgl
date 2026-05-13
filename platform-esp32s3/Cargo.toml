@@ -18,5 +18,15 @@ display-interface = "0.5"
 display-interface-spi = "0.5"
 log = "0.4"
 
+# Runtime support crates needed by the `aibi_face_demo` example. They live in
+# dev-dependencies because the library itself stays panic/println agnostic.
+[dev-dependencies]
+esp-backtrace = { version = "0.14", features = ["esp32s3", "panic-handler", "exception-handler", "println"] }
+esp-println = { version = "0.12", features = ["esp32s3", "log"] }
+
+[[example]]
+name = "aibi_face_demo"
+required-features = []
+
 [features]
 default = []
