@@ -6,7 +6,7 @@ on:
       - main
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64]
     container:
       image: docker.io/iraa/rlvgl:latest
       # Start as your non-root user right away
@@ -23,7 +23,7 @@ jobs:
       - run: RUSTDOCFLAGS="--cfg docsrs --cfg nightly" cargo +nightly doc --all-features --no-deps --target x86_64-unknown-linux-gnu
 
   stm32h747i-disco:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64]
     container:
       image: docker.io/iraa/rlvgl:latest
 
@@ -47,7 +47,7 @@ jobs:
 
   stm32h747i-disco-fatfs:
     continue-on-error: true
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64]
     container:
       image: docker.io/iraa/rlvgl:latest
     steps:
@@ -65,7 +65,7 @@ jobs:
 
   polish:
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64]
     container:
       image: docker.io/iraa/rlvgl:latest
     steps:
@@ -76,7 +76,7 @@ jobs:
         run: bash scripts/pre-commit.sh
 
   chipdb:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64]
     container:
       image: docker.io/iraa/rlvgl:latest
     steps:
@@ -91,7 +91,7 @@ jobs:
         run: cargo build -p rlvgl-chips-stm
 
   boards:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64]
     container:
       image: docker.io/iraa/rlvgl:latest
     steps:
