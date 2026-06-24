@@ -11,7 +11,7 @@ on:
 
 jobs:
   pipeline:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64]
     container:
       image: docker.io/iraa/rlvgl:latest
 
