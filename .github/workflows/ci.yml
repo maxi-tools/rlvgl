@@ -5,13 +5,30 @@ on:
     branches:
       - main
 jobs:
+  image:
+    # Build the rlvgl toolchain image for arm64 from the repo Dockerfile and
+    # publish it to the org GHCR, replacing docker.io/iraa/rlvgl:latest (amd64
+    # only — it can't run on the self-hosted arm64 fleet). The Dockerfile is
+    # arch-portable (ubuntu:24.04 + apt/rustup/node), so this builds natively.
+    # Docker layer cache on the runner keeps repeat builds fast.
+    runs-on: [self-hosted, Linux, ARM64]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Build and push arm64 toolchain image
+        run: |
+          docker build -t ghcr.io/maxi-tools/rlvgl:latest .
+          docker push ghcr.io/maxi-tools/rlvgl:latest
+
   build:
+    needs: image
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: docker.io/iraa/rlvgl:latest
-      # Start as your non-root user right away
-      # options: --user ${{ vars.RLVGL_BUILDER_USER }}
-
+      image: ghcr.io/maxi-tools/rlvgl:latest
     steps:
       - uses: actions/checkout@v4
       - name: Prepare build environment
@@ -19,14 +36,14 @@ jobs:
       - run: cargo build --workspace --verbose
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace -- -D warnings
-      - run: cargo test --workspace --target x86_64-unknown-linux-gnu --verbose
-      - run: RUSTDOCFLAGS="--cfg docsrs --cfg nightly" cargo +nightly doc --all-features --no-deps --target x86_64-unknown-linux-gnu
+      - run: cargo test --workspace --target aarch64-unknown-linux-gnu --verbose
+      - run: RUSTDOCFLAGS=\"--cfg docsrs --cfg nightly\" cargo +nightly doc --all-features --no-deps --target aarch64-unknown-linux-gnu
 
   stm32h747i-disco:
+    needs: image
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: docker.io/iraa/rlvgl:latest
-
+      image: ghcr.io/maxi-tools/rlvgl:latest
     steps:
       - uses: actions/checkout@v4
       - name: Prepare build environment
@@ -34,7 +51,7 @@ jobs:
       - name: Install target
         run: rustup target add thumbv7em-none-eabihf
       - name: Build firmware
-        run: RUSTFLAGS="" cargo build --bin rlvgl-stm32h747i-disco --features "stm32h747i_disco,qrcode,png,jpeg,fontdue" --target thumbv7em-none-eabihf --release
+        run: RUSTFLAGS=\"\" cargo build --bin rlvgl-stm32h747i-disco --features \"stm32h747i_disco,qrcode,png,jpeg,fontdue\" --target thumbv7em-none-eabihf --release
       - name: Firmware size
         run: arm-none-eabi-size target/thumbv7em-none-eabihf/release/rlvgl-stm32h747i-disco | tee size.txt
       - name: Upload firmware
@@ -46,10 +63,11 @@ jobs:
             size.txt
 
   stm32h747i-disco-fatfs:
+    needs: image
     continue-on-error: true
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: docker.io/iraa/rlvgl:latest
+      image: ghcr.io/maxi-tools/rlvgl:latest
     steps:
       - uses: actions/checkout@v4
       - name: Prepare build environment
@@ -58,16 +76,17 @@ jobs:
         run: rustup target add thumbv7em-none-eabihf
       - name: Build firmware (fatfs no_std demo)
         run: |
-          RUSTFLAGS="" cargo build \
-            --bin rlvgl-stm32h747i-disco \
-            --features "stm32h747i_disco,fatfs_nostd,sd_assets_demo" \
+          RUSTFLAGS=\"\" cargo build \\
+            --bin rlvgl-stm32h747i-disco \\
+            --features \"stm32h747i_disco,fatfs_nostd,sd_assets_demo\" \\
             --target thumbv7em-none-eabihf --release || true
 
   polish:
+    needs: image
     if: github.event_name == 'push'
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: docker.io/iraa/rlvgl:latest
+      image: ghcr.io/maxi-tools/rlvgl:latest
     steps:
       - uses: actions/checkout@v4
       - name: Prepare build environment
@@ -76,9 +95,10 @@ jobs:
         run: bash scripts/pre-commit.sh
 
   chipdb:
+    needs: image
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: docker.io/iraa/rlvgl:latest
+      image: ghcr.io/maxi-tools/rlvgl:latest
     steps:
       - uses: actions/checkout@v4
       - name: Prepare build environment
@@ -91,9 +111,10 @@ jobs:
         run: cargo build -p rlvgl-chips-stm
 
   boards:
+    needs: image
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: docker.io/iraa/rlvgl:latest
+      image: ghcr.io/maxi-tools/rlvgl:latest
     steps:
       - uses: actions/checkout@v4
       - name: Prepare build environment
