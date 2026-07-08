@@ -1,146 +1,32 @@
-# Continuous integration pipeline building, linting, testing, and cross-compiling embedded examples.
+# Thin standard Rust CI wrapper for maxi-tools repos.
+# Source of truth: maxi-config/workflows/rust-ci.yml
+# Copy to .github/workflows/ci.yml in simple Rust repos that can use the
+# canonical lane policy without repo-local CI customization.
+
 name: CI
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'pull_request' }}
+
 on:
+  push:
+    branches: [main, release/**]
   pull_request:
-    branches:
-      - main
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  workflow_dispatch:
+
+permissions: {}
+
 jobs:
-  image:
-    # Build the rlvgl toolchain image for arm64 from the repo Dockerfile and
-    # publish it to the org GHCR, replacing docker.io/iraa/rlvgl:latest (amd64
-    # only — it can't run on the self-hosted arm64 fleet). The Dockerfile is
-    # arch-portable (ubuntu:24.04 + apt/rustup/node), so this builds natively.
-    # Docker layer cache on the runner keeps repeat builds fast.
-    runs-on: [self-hosted, Linux, ARM64]
+  merge-gate:
+    uses: maxi-tools/maxi-config/.github/workflows/rust-ci.yml@main
     permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Log in to GHCR
-        run: echo \"${{ secrets.GITHUB_TOKEN }}\" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-      - name: Build and push arm64 toolchain image
-        run: |
-          docker build -t ghcr.io/maxi-tools/rlvgl:latest .
-          docker push ghcr.io/maxi-tools/rlvgl:latest
-
-  build:
-    needs: image
-    runs-on: [self-hosted, Linux, ARM64]
-    container:
-      image: ghcr.io/maxi-tools/rlvgl:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare build environment
-        run: bash scripts/setup-ci-env.sh
-      - run: cargo build --workspace --verbose
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace -- -D warnings
-      - run: cargo test --workspace --target aarch64-unknown-linux-gnu --verbose
-      - run: RUSTDOCFLAGS=\"--cfg docsrs --cfg nightly\" cargo +nightly doc --all-features --no-deps --target aarch64-unknown-linux-gnu
-
-  stm32h747i-disco:
-    needs: image
-    runs-on: [self-hosted, Linux, ARM64]
-    container:
-      image: ghcr.io/maxi-tools/rlvgl:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare build environment
-        run: bash scripts/setup-ci-env.sh
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build firmware
-        run: RUSTFLAGS=\"\" cargo build --bin rlvgl-stm32h747i-disco --features \"stm32h747i_disco,qrcode,png,jpeg,fontdue\" --target thumbv7em-none-eabihf --release
-      - name: Firmware size
-        run: arm-none-eabi-size target/thumbv7em-none-eabihf/release/rlvgl-stm32h747i-disco | tee size.txt
-      - name: Upload firmware
-        uses: actions/upload-artifact@v4
-        with:
-          name: rlvgl-stm32h747i-disco
-          path: |
-            target/thumbv7em-none-eabihf/release/rlvgl-stm32h747i-disco
-            size.txt
-
-  stm32h747i-disco-fatfs:
-    needs: image
-    continue-on-error: true
-    runs-on: [self-hosted, Linux, ARM64]
-    container:
-      image: ghcr.io/maxi-tools/rlvgl:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare build environment
-        run: bash scripts/setup-ci-env.sh
-      - name: Install target
-        run: rustup target add thumbv7em-none-eabihf
-      - name: Build firmware (fatfs no_std demo)
-        run: |
-          RUSTFLAGS=\"\" cargo build \\
-            --bin rlvgl-stm32h747i-disco \\
-            --features \"stm32h747i_disco,fatfs_nostd,sd_assets_demo\" \\
-            --target thumbv7em-none-eabihf --release || true
-
-  polish:
-    needs: image
-    if: github.event_name == 'push'
-    runs-on: [self-hosted, Linux, ARM64]
-    container:
-      image: ghcr.io/maxi-tools/rlvgl:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare build environment
-        run: bash scripts/setup-ci-env.sh
-      - name: Run polish
-        run: bash scripts/pre-commit.sh
-
-  chipdb:
-    needs: image
-    runs-on: [self-hosted, Linux, ARM64]
-    container:
-      image: ghcr.io/maxi-tools/rlvgl:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare build environment
-        run: bash scripts/setup-ci-env.sh
-      - name: Generate vendor databases
-        run: tools/build_vendor.sh
-      - name: Build vendor crate
-        env:
-          RLVGL_CHIP_SRC: chipdb/rlvgl-chips-stm/generated
-        run: cargo build -p rlvgl-chips-stm
-
-  boards:
-    needs: image
-    runs-on: [self-hosted, Linux, ARM64]
-    container:
-      image: ghcr.io/maxi-tools/rlvgl:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Prepare build environment
-        run: bash scripts/setup-ci-env.sh
-      - name: Build STM32 board database
-        run: bash scripts/stm32_afdb_pipeline.sh
-      - name: Upload boards.json
-        uses: actions/upload-artifact@v4
-        with:
-          name: boards-json
-          path: chipdb/rlvgl-chips-stm/db/boards.json
+      contents: write
+      pull-requests: read
+      actions: read
+      id-token: write
+      pages: write
+    with:
+      repo_policy: standard-rust
+    secrets: inherit
