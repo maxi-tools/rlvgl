@@ -74,9 +74,11 @@ collecte de la couverture, assurez-vous que les variables d'environnement suivan
 également présentes dans `.cargo/config.toml`) :
 
 
+```
 CARGO_INCREMENTAL=0
 RUSTFLAGS="-Zinstrument-coverage"
 LLVM_PROFILE_FILE="coverage-%p-%m.profraw"
+```
 
 Les futures exécutions de Codex devraient se concentrer sur une couverture mesurable et utiliser ces variables
 lors de la génération des tests.

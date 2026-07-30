@@ -75,9 +75,11 @@ collecting coverage, ensure the following environment variables are set (they ar
 also present in `.cargo/config.toml`):
 
 
+```
 CARGO_INCREMENTAL=0
 RUSTFLAGS="-Zinstrument-coverage"
 LLVM_PROFILE_FILE="coverage-%p-%m.profraw"
+```
 
 Future Codex runs should focus on measurable coverage and use these variables
 when generating tests.
