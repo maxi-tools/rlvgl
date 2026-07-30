@@ -41,9 +41,10 @@ Imported from `fr-CA/examples/stm32h747i-disco/MEMORY.md`.
       - Actuellement déclaré mais pas encore utilisé par des sections; réservé aux tampons d'affichage (framebuffers), pools partagés, etc.
     
     - D2 SRAM (domaine CM4, boîte aux lettres réservée)
-    - `RAM` CM4: `0x3000_0000`..`0x3003_FFFF` (comptée comme 255 Ko de RAM générale + 1 Ko de boîte aux lettres = 256 Ko au total).
-      La boîte aux lettres de 1 Ko se trouve à `0x3004_7000` et doit être accessible séparément de la fenêtre RAM générale.
-      - Boîte aux lettres (partagée): `0x3004_7000`..`0x3004_73FF` (1 Ko) dans les deux scripts de liaison.
+    - `RAM` CM4 (D2 SRAM1+SRAM2): `0x3000_0000`..`0x3003_FFFF` (**256 Ko** contigus).
+      La boîte aux lettres partagée **n'est pas** découpée dans cette fenêtre: elle se trouve en D2 SRAM3 à
+      `0x3004_7000`..`0x3004_73FF` (1 Ko) — région physique séparée de 32 Ko — et doit être
+      accédée séparément de la fenêtre de RAM générale.
     
     - D3 SRAM4 (rétention CM4)
       - `D3_CM4`: `0x3800_0000`..`0x3800_FFFF` (64 Ko) déclaré pour la rétention/faible consommation.
@@ -55,7 +56,7 @@ Imported from `fr-CA/examples/stm32h747i-disco/MEMORY.md`.
     | RAM        | CM7          | DTCM    | `0x2000_0000`| 128 Ko   | Pile/données par défaut du CM7 (TCM rapide, non partagé) |
     | D1_CM7     | CM7          | D1 AXI  | `0x2400_0000`| 384 Ko   | Tranche AXI SRAM du CM7 (grands tampons, FB, etc.) |
     | D1_CM4     | CM4          | D1 AXI  | `0x2406_0000`| 128 Ko   | Tranche AXI SRAM du CM4                       |
-    | RAM (CM4)  | CM4          | D2      | `0x3000_0000`| 255 Ko   | Pile/données par défaut du CM4 (RAM générale) |
+    | RAM (CM4)  | CM4          | D2      | `0x3000_0000`| 256 Ko   | Pile/données par défaut du CM4 (RAM générale) |
     | MAILBOX    | Partagé      | D2      | `0x3004_7000`| 1 Ko     | Boîte aux lettres inter-cœur; sémaphore à `+0x000` |
     | D3_CM4     | CM4          | D3      | `0x3800_0000`| 64 Ko    | Région de rétention/faible consommation       |
     

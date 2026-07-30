@@ -40,9 +40,10 @@ Imported from `examples/stm32h747i-disco/MEMORY.md`.
       - Currently declared but not yet used by sections; reserve for framebuffers, shared pools, etc.
     
     - D2 SRAM (CM4 domain, mailbox reserved)
-    - CM4 `RAM`: `0x3000_0000`..`0x3003_FFFF` (accounted as 255 KB general RAM + 1 KB mailbox = 256 KB total).
-      The 1 KB mailbox lives at `0x3004_7000` and must be accessed separately from the general RAM window.
-      - Mailbox (shared): `0x3004_7000`..`0x3004_73FF` (1 KB) in both linker scripts.
+    - CM4 `RAM` (D2 SRAM1+SRAM2): `0x3000_0000`..`0x3003_FFFF` (**256 KB** contiguous).
+      Mailbox (shared) is **not** carved from that window: it sits in D2 SRAM3 at
+      `0x3004_7000`..`0x3004_73FF` (1 KB) — a physically separate 32 KB region — and must be
+      accessed separately from the general RAM window.
     
     - D3 SRAM4 (CM4 retention)
       - `D3_CM4`: `0x3800_0000`..`0x3800_FFFF` (64 KB) declared for retention/low power.
@@ -54,7 +55,7 @@ Imported from `examples/stm32h747i-disco/MEMORY.md`.
     | RAM        | CM7    | DTCM   | `0x2000_0000`| 128 KB | CM7 default stack/data (fast TCM, non-shared) |
     | D1_CM7     | CM7    | D1 AXI | `0x2400_0000`| 384 KB | CM7 AXI SRAM slice (large buffers, FB, etc.)  |
     | D1_CM4     | CM4    | D1 AXI | `0x2406_0000`| 128 KB | CM4 AXI SRAM slice                            |
-    | RAM (CM4)  | CM4    | D2     | `0x3000_0000`| 255 KB | CM4 default stack/data (general RAM)           |
+    | RAM (CM4)  | CM4    | D2     | `0x3000_0000`| 256 KB | CM4 default stack/data (D2 SRAM1+SRAM2)         |
     | MAILBOX    | Shared | D2     | `0x3004_7000`| 1 KB   | Cross-core mailbox; semaphore at `+0x000`     |
     | D3_CM4     | CM4    | D3     | `0x3800_0000`| 64 KB  | Retention/low-power region                    |
     

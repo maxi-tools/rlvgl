@@ -41,9 +41,10 @@ Imported from `es-MX/examples/stm32h747i-disco/MEMORY.md`.
       - Actualmente declaradas pero aún no utilizadas por secciones; reservadas para framebuffers, pools compartidos, etc.
     
     - D2 SRAM (dominio CM4, buzón reservado)
-    - CM4 `RAM`: `0x3000_0000`..`0x3003_FFFF` (contabilizado como 255 KB de RAM general + 1 KB de buzón = 256 KB total).
-      El buzón de 1 KB reside en `0x3004_7000` y debe ser accedido por separado de la ventana de RAM general.
-      - Buzón (compartido): `0x3004_7000`..`0x3004_73FF` (1 KB) en ambos scripts de enlazado.
+    - CM4 `RAM` (D2 SRAM1+SRAM2): `0x3000_0000`..`0x3003_FFFF` (**256 KB** contiguos).
+      El buzón compartido **no** se descuenta de esa ventana: está en D2 SRAM3 en
+      `0x3004_7000`..`0x3004_73FF` (1 KB) — región física separada de 32 KB — y debe
+      accederse por separado de la ventana de RAM general.
     
     - D3 SRAM4 (retención de CM4)
       - `D3_CM4`: `0x3800_0000`..`0x3800_FFFF` (64 KB) declarado para retención/bajo consumo.
@@ -55,7 +56,7 @@ Imported from `es-MX/examples/stm32h747i-disco/MEMORY.md`.
     | RAM        | CM7         | DTCM    | `0x2000_0000`| 128 KB | Pila/datos por defecto de CM7 (TCM rápido, no compartido) |
     | D1_CM7     | CM7         | D1 AXI  | `0x2400_0000`| 384 KB | Segmento CM7 AXI SRAM (grandes búferes, FB, etc.)   |
     | D1_CM4     | CM4         | D1 AXI  | `0x2406_0000`| 128 KB | Segmento CM4 AXI SRAM                             |
-    | RAM (CM4)  | CM4         | D2      | `0x3000_0000`| 255 KB | Pila/datos por defecto de CM4 (RAM general)        |
+    | RAM (CM4)  | CM4         | D2      | `0x3000_0000`| 256 KB | Pila/datos por defecto de CM4 (RAM general)        |
     | MAILBOX    | Compartido  | D2      | `0x3004_7000`| 1 KB   | Buzón entre núcleos; semáforo en `+0x000`         |
     | D3_CM4     | CM4         | D3      | `0x3800_0000`| 64 KB  | Región de retención/bajo consumo                  |
     
