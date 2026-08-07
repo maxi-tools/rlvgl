@@ -1,0 +1,29 @@
+{
+  "nodes": [
+    {
+      "id": "memories/en-us/examples/stm32h747i-disco/memory",
+      "glyph": "ICON:Profiler.Memory",
+      "title": "en-US/examples/stm32h747i-disco/MEMORY.md",
+      "typ": "memory"
+    },
+    {
+      "id": "memories/es-mx/examples/stm32h747i-disco/memory",
+      "glyph": "ICON:Profiler.Memory",
+      "title": "es-MX/examples/stm32h747i-disco/MEMORY.md",
+      "typ": "memory"
+    },
+    {
+      "id": "memories/examples/stm32h747i-disco/memory",
+      "glyph": "ICON:Profiler.Memory",
+      "title": "examples/stm32h747i-disco/MEMORY.md",
+      "typ": "memory"
+    },
+    {
+      "id": "memories/fr-ca/examples/stm32h747i-disco/memory",
+      "glyph": "ICON:Profiler.Memory",
+      "title": "fr-CA/examples/stm32h747i-disco/MEMORY.md",
+      "typ": "memory"
+    }
+  ],
+  "edges": []
+}
