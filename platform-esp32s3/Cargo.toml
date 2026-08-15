@@ -25,14 +25,30 @@ log = "0.4"
 
 # Runtime support crates needed by the `aibi_face_demo` example. They live in
 # dev-dependencies because the library itself stays panic/println agnostic.
-[dev-dependencies]
+#
+# Target-gated for the same reason as the `[dependencies]` block above: these
+# crates are Xtensa/RISC-V only. `esp-backtrace` in particular selects its
+# `arch` module with `#[cfg_attr(target_arch = "riscv32"/"xtensa", path = ...)]`,
+# so on a host target no `arch` file resolves and it fails to compile with
+# E0583. `cargo check --workspace` never noticed because dev-dependencies are
+# only built for test/example/bench targets — `--all-targets` builds the lib's
+# unit-test target, which links dev-deps, and that is what broke the host build.
+[target.'cfg(target_arch = "xtensa")'.dev-dependencies]
 esp-backtrace = { version = "0.14", features = ["esp32s3", "panic-handler", "exception-handler", "println"] }
 esp-println = { version = "0.12", features = ["esp32s3", "log"] }
 embedded-hal-bus = "0.2"
 
+# The example is `#![no_std] #![no_main]` and uses esp-hal/esp-backtrace
+# unconditionally, so it can only ever be built for the Xtensa target. Cargo
+# has no cfg gate for target definitions, so gate it behind a non-default
+# feature instead; that keeps `--all-targets` from trying to build it on the
+# host without deleting the example.
 [[example]]
 name = "aibi_face_demo"
-required-features = []
+required-features = ["hw"]
 
 [features]
 default = []
+# Opt-in flag for the on-device example targets. Only meaningful when building
+# for `xtensa-esp32s3-none-elf`; enabling it on the host will not compile.
+hw = []
