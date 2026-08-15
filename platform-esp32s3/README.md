@@ -39,8 +39,14 @@ your board exposes a controllable backlight rail.
 cargo build --release \
     -p rlvgl-platform-esp32s3 \
     --example aibi_face_demo \
+    --features hw \
     --target xtensa-esp32s3-none-elf \
     -Zbuild-std=core
 ```
 
 Requires the Xtensa Rust toolchain (`espup install`).
+
+The `hw` feature gates the on-device example so that host-side workspace
+commands (`cargo check --workspace --all-targets`, `cargo test --workspace`)
+skip it. The library itself is cfg-gated to `target_arch = "xtensa"` and
+compiles down to an empty crate everywhere else.
