@@ -32,6 +32,14 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      # The Dockerfile ends on `USER rlvgl`, and the self-hosted ARM64 fleet
+      # runs ROOTLESS docker: only container-uid-0 maps to the runner account
+      # that owns the workspace; every other container uid lands in a subuid
+      # range that owns nothing on the host. As the image user, the very first
+      # action cannot write /__w/_temp/_runner_file_commands and dies with
+      # EACCES before checkout. --user root here is the unprivileged runner
+      # account on the host, not host root, so this costs no isolation.
+      options: --user root
     steps:
       - uses: actions/checkout@v4
       - name: Prepare build environment
@@ -50,6 +58,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
     steps:
       - uses: actions/checkout@v4
       - name: Prepare build environment
@@ -77,6 +86,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
     steps:
       - uses: actions/checkout@v4
       - name: Prepare build environment
@@ -99,6 +109,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
     steps:
       - uses: actions/checkout@v4
       - name: Prepare build environment
@@ -114,6 +125,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
     steps:
       - uses: actions/checkout@v4
       - name: Prepare build environment
@@ -133,6 +145,7 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
     steps:
       - uses: actions/checkout@v4
       - name: Prepare build environment
