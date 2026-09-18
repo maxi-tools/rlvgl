@@ -141,7 +141,7 @@ impl Blitter for CpuBlitter {
                         break;
                     }
                     let line = &mut dst.buf[start..end];
-                    for px in line.chunks_exact_mut(4) {
+                    for px in line.as_chunks_mut::<4>().0 {
                         px.copy_from_slice(&color.to_le_bytes());
                     }
                 }
@@ -156,7 +156,7 @@ impl Blitter for CpuBlitter {
                         break;
                     }
                     let line = &mut dst.buf[start..end];
-                    for px in line.chunks_exact_mut(2) {
+                    for px in line.as_chunks_mut::<2>().0 {
                         px.copy_from_slice(&c.to_le_bytes());
                     }
                 }
