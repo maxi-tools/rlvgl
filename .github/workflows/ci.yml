@@ -11,6 +11,13 @@ jobs:
     # only — it can't run on the self-hosted arm64 fleet). The Dockerfile is
     # arch-portable (ubuntu:24.04 + apt/rustup/node), so this builds natively.
     # Docker layer cache on the runner keeps repeat builds fast.
+    #
+    # Tagged with the run's commit SHA, never `latest`. This workflow only
+    # runs on pull_request, so the Dockerfile being built is PR-controlled:
+    # a shared mutable tag would let one PR's image be pulled by another PR's
+    # jobs — and, if two image jobs overlapped, silently swap the toolchain
+    # under a run already in flight. An immutable per-commit tag makes each
+    # run's containers provably the image built from that run's tree.
     runs-on: [self-hosted, Linux, ARM64]
     permissions:
       contents: read
@@ -18,17 +25,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        # Token and actor via env, not `${{ }}` inside the script: a value with
+        # shell metacharacters would otherwise be parsed as command text.
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
       - name: Build and push arm64 toolchain image
+        env:
+          IMAGE: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
         run: |
-          docker build -t ghcr.io/maxi-tools/rlvgl:latest .
-          docker push ghcr.io/maxi-tools/rlvgl:latest
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
 
   build:
     needs: image
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: ghcr.io/maxi-tools/rlvgl:latest
+      image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -54,7 +68,7 @@ jobs:
     needs: image
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: ghcr.io/maxi-tools/rlvgl:latest
+      image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -82,7 +96,7 @@ jobs:
     continue-on-error: true
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: ghcr.io/maxi-tools/rlvgl:latest
+      image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -105,7 +119,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: ghcr.io/maxi-tools/rlvgl:latest
+      image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -121,7 +135,7 @@ jobs:
     needs: image
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: ghcr.io/maxi-tools/rlvgl:latest
+      image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -141,7 +155,7 @@ jobs:
     needs: image
     runs-on: [self-hosted, Linux, ARM64]
     container:
-      image: ghcr.io/maxi-tools/rlvgl:latest
+      image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -157,3 +171,35 @@ jobs:
         with:
           name: boards-json
           path: chipdb/rlvgl-chips-stm/db/boards.json
+
+  # Exercises the rlvgl-creator pipeline end-to-end: scan, convert, sync,
+  # scaffold and vendor over the example assets pack.
+  #
+  # Lives here rather than in its own workflow so it can say `needs: image`.
+  # As `creator-e2e.yml` it ran concurrently with this file's image job and
+  # pulled a tag that job had not pushed yet — red before checkout on a first
+  # run, and on later runs whatever `latest` happened to hold. Cross-workflow
+  # ordering has no expression for "after that job", so the job moved to the
+  # graph that already had one.
+  pipeline:
+    needs: image
+    runs-on: [self-hosted, Linux, ARM64]
+    container:
+      image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare build environment
+        run: bash scripts/setup-ci-env.sh
+      - name: Build rlvgl-creator
+        run: cargo build --bin rlvgl-creator --features creator,lottie
+      - name: Run creator pipeline
+        run: |
+          target/debug/rlvgl-creator scan examples/assets-pack --manifest examples/assets-pack/manifest.yml
+          target/debug/rlvgl-creator convert examples/assets-pack --manifest examples/assets-pack/manifest.yml
+          target/debug/rlvgl-creator sync --out examples/assets-pack/out --manifest examples/assets-pack/manifest.yml
+          target/debug/rlvgl-creator scaffold examples/assets-pack/crate --manifest examples/assets-pack/manifest.yml
+          target/debug/rlvgl-creator vendor examples/assets-pack --out examples/assets-pack/out --allow MIT --manifest examples/assets-pack/manifest.yml
