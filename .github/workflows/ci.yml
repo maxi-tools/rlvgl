@@ -80,7 +80,12 @@ jobs:
       - name: Install target
         run: rustup target add thumbv7em-none-eabihf
       - name: Build firmware
-        run: RUSTFLAGS=\"\" cargo build --bin rlvgl-stm32h747i-disco --features \"stm32h747i_disco,qrcode,png,jpeg,fontdue\" --target thumbv7em-none-eabihf --release
+        # Plain scalar, so \" would be a literal backslash-quote: RUSTFLAGS
+        # then holds two quote characters, rustc reads them as a second input
+        # filename, and the build dies in `--print` before it starts ("multiple
+        # input filenames provided (first two filenames are `-` and `\"\"`)").
+        # Same defect as the GHCR login line this PR fixes.
+        run: RUSTFLAGS="" cargo build --bin rlvgl-stm32h747i-disco --features "stm32h747i_disco,qrcode,png,jpeg,fontdue" --target thumbv7em-none-eabihf --release
       - name: Firmware size
         run: arm-none-eabi-size target/thumbv7em-none-eabihf/release/rlvgl-stm32h747i-disco | tee size.txt
       - name: Upload firmware
@@ -109,9 +114,9 @@ jobs:
         run: rustup target add thumbv7em-none-eabihf
       - name: Build firmware (fatfs no_std demo)
         run: |
-          RUSTFLAGS=\"\" cargo build \\
-            --bin rlvgl-stm32h747i-disco \\
-            --features \"stm32h747i_disco,fatfs_nostd,sd_assets_demo\" \\
+          RUSTFLAGS="" cargo build \
+            --bin rlvgl-stm32h747i-disco \
+            --features "stm32h747i_disco,fatfs_nostd,sd_assets_demo" \
             --target thumbv7em-none-eabihf --release || true
 
   polish:
