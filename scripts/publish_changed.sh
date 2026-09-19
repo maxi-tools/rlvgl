@@ -217,12 +217,8 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
-if [[ -z "${CARGO_REGISTRY_TOKEN:-}" ]]; then
-  echo "CARGO_REGISTRY_TOKEN is not set." >&2
-  exit 1
-fi
-
 prev_published=""
+published_count=0
 for crate in "${changed[@]}"; do
   version=$(crate_version "$crate")
   if [[ -z "$version" ]]; then
@@ -238,6 +234,15 @@ for crate in "${changed[@]}"; do
     if [[ "$status" -ne 1 ]]; then
       exit "$status"
     fi
+  fi
+
+  # Only a crate that actually needs publishing requires the registry token.
+  # Demanding it up front turned a genuine no-op -- every changed crate already
+  # live on crates.io at its current version -- into a hard failure, which is
+  # what kept the scheduled Publish Continue lane red on main.
+  if [[ -z "${CARGO_REGISTRY_TOKEN:-}" ]]; then
+    echo "CARGO_REGISTRY_TOKEN is not set; cannot publish $crate v$version." >&2
+    exit 1
   fi
 
   # crates.io needs time to index a new publish before dependents can resolve it.
@@ -259,4 +264,9 @@ for crate in "${changed[@]}"; do
     publish_crate "$crate" "$version" cargo publish -p "$crate" --no-verify
   fi
   prev_published="$crate"
+  published_count=$((published_count + 1))
 done
+
+if [[ "$published_count" -eq 0 ]]; then
+  echo "All changed crates are already published at their current versions; nothing to publish."
+fi
