@@ -4,6 +4,65 @@ on:
   pull_request:
     branches:
       - main
+
+# Every job in this file runs on the org's persistent ARM64 fleet, and this
+# repository is PUBLIC, so `pull_request` reaches it from forks. Two halves of
+# the fleet's trust rule apply, and they go in two different places because they
+# defend against two different things:
+#
+#   * JOB-LEVEL `if:` on all seven fleet jobs -- the REPOSITORY half. A fork
+#     pull request never gets a runner at all. This is the boundary that
+#     matters: the runner is persistent, holds a shared cargo home, a shared
+#     sccache and a rootless docker socket between jobs, and `image` pushes
+#     what it builds to the org GHCR. A guard that only fails a step does not
+#     help here, because a step-level `if:` inside a `container:` job runs
+#     AFTER GitHub has already pulled the PR's own image and started it -- the
+#     gate would be PR-authored code, executing inside a PR-authored image.
+#     That is why these guards are job-level and why none of them is a step.
+#
+#     Each is TWO clauses, not one, and the second is not decoration.
+#     `event_name != 'pull_request' || same-repository` alone admits every
+#     `workflow_dispatch`: for a dispatch the first disjunct is simply true, so
+#     anyone with write access could point this workflow at a branch of their
+#     own and have the fleet build that branch. `gh workflow run --ref`
+#     accepts any ref, so a dispatch is a trigger, not a statement about who
+#     wrote the tree. Hence the second clause pinning dispatch to the owner by
+#     numeric id, the same pairing maxi-config's codeql and clippy templates
+#     carry. `ci.yml` declares no `workflow_dispatch` trigger today, so both
+#     clauses are inert -- they are here so that adding the trigger later is a
+#     one-line change that is already correct.
+#
+#   * THE TRUST-GATE STEP in `image`, ahead of its checkout -- the SENDER half.
+#     `image` is the only job here that runs on the bare runner rather than in
+#     a container, so it is the only place a sender check can execute before
+#     any PR-controlled file exists on the machine. Same-repository is not
+#     sufficient on its own: a collaborator can push to a same-repository PR
+#     branch and the owner's follow-up `synchronize` then carries that
+#     collaborator's tree, so the last sender is the owner while the code is
+#     not. Sender ids are pinned numerically because a login can be
+#     reassigned and an id cannot. The expression is the fleet's, copied
+#     verbatim from maxi-config's review-gate-unstick.yml (maxi-config#1019),
+#     including the `merge_group` arm.
+#
+# WHAT THIS DOES NOT CLAIM: for `pull_request`, GitHub runs the workflow file
+# from the PR's merge commit, so a fork can edit these guards or add a job
+# that was never here, and no condition in this file constrains a job that does
+# not exist yet. These are defence in depth over the lanes we ship. The
+# boundary for the rest is the org's "self-hosted runners for fork pull
+# requests" setting plus required approval for outside contributors.
+#
+# tests/test_workflow_trust_gate.py derives the population of self-hosted
+# pull_request jobs from these files and fails if any of them lacks a guard. It
+# evaluates the conditions rather than matching fragments, because a guard one
+# level too deep behind a permissive disjunct reads as handled and is not.
+#
+# No workflow-level `permissions:` block is added. It was tried and removed:
+# `permissions: {}` sets EVERY scope to none, and the six container jobs pull
+# `ghcr.io/maxi-tools/rlvgl:${{ github.sha }}` with `secrets.GITHUB_TOKEN` as
+# the container password, which needs `packages: read`, while `actions/checkout`
+# needs `contents: read`. Both would fail. Tightening those six to an explicit
+# least-privilege list is a real improvement and is left as a follow-up rather
+# than landed blind from a lane nothing here can execute.
 jobs:
   image:
     # Build the rlvgl toolchain image for arm64 from the repo Dockerfile and
@@ -18,11 +77,48 @@ jobs:
     # jobs — and, if two image jobs overlapped, silently swap the toolchain
     # under a run already in flight. An immutable per-commit tag makes each
     # run's containers provably the image built from that run's tree.
+    #
+    # Same-repository pull requests only. See the file header: this is the
+    # repository half of the fleet's trust rule, and it is a JOB-level
+    # condition rather than a step because `image` holds `packages: write` and
+    # executes the PR's own Dockerfile on a persistent fleet runner.
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'workflow_dispatch' ||
+       github.event.sender.id == 874012)
     runs-on: [self-hosted, Linux, ARM64]
     permissions:
       contents: read
       packages: write
     steps:
+      # The fleet trust gate, copied verbatim from maxi-config's
+      # review-gate-unstick.yml (maxi-config#1019) including the merge_group
+      # arm. `push` and `schedule` are cleared unconditionally; a dispatch is
+      # admitted only from a trusted sender; a pull request needs BOTH a
+      # trusted sender and a same-repository head; only `merge_group`'s
+      # `checks_requested` action is admitted.
+      #
+      # FIRST STEP, ahead of checkout, and that ordering is the whole point:
+      # every later line of this job runs PR-controlled content, and after
+      # checkout that content is on the runner's disk. This is the only job in
+      # the file that executes on the bare runner rather than inside the
+      # container the other six pull, so it is the only place a sender check
+      # can run before any PR-controlled file exists on the machine.
+      #
+      # It is defence in depth behind the job-level `if:` above, not a
+      # replacement for it. Both halves are load-bearing: the `if:` keeps a
+      # fork off the runner entirely, and this catches the case the `if:`
+      # admits -- a same-repository pull request whose final sender is the
+      # owner but whose tree carries a collaborator's commits.
+      - name: trust gate
+        if: ${{ github.actor != 'dependabot[bot]' && !(github.event_name == 'push' || github.event_name == 'schedule' || ((github.event.sender.id == 874012 || github.event.sender.id == 264883562) && (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))) || (github.event_name == 'merge_group' && github.event.action == 'checks_requested')) }}
+        env:
+          SENDER_LOGIN: ${{ github.event.sender.login }}
+        run: |
+          echo "::error::Untrusted sender (${SENDER_LOGIN}): this job only runs code pushed by trusted senders on self-hosted runners. Push a commit as a trusted sender or re-run via workflow_dispatch."
+          exit 1
+
       - uses: actions/checkout@v4
       - name: Log in to GHCR
         # Token and actor via env, not `${{ }}` inside the script: a value with
@@ -40,6 +136,17 @@ jobs:
 
   build:
     needs: image
+    # Same-repository pull requests only. This job runs PR code inside the
+    # image `image` built FROM that same pull request, on a persistent fleet
+    # runner, so the guard has to be here at job level: a step-level `if:`
+    # would be evaluated after GitHub had already pulled and started the
+    # PR's container, which is exactly the code it is meant to keep off the
+    # machine. See the file header.
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'workflow_dispatch' ||
+       github.event.sender.id == 874012)
     runs-on: [self-hosted, Linux, ARM64]
     container:
       image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
@@ -66,6 +173,14 @@ jobs:
 
   stm32h747i-disco:
     needs: image
+    # Same-repository pull requests only. See `build` above and the file
+    # header: job level, because a container job's steps only run once the
+    # pull request's own image is already running.
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'workflow_dispatch' ||
+       github.event.sender.id == 874012)
     runs-on: [self-hosted, Linux, ARM64]
     container:
       image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
@@ -99,6 +214,14 @@ jobs:
   stm32h747i-disco-fatfs:
     needs: image
     continue-on-error: true
+    # Same-repository pull requests only. See `build` above and the file
+    # header. `continue-on-error` does not soften this: it marks the OUTCOME
+    # advisory, it does not change which runner the job lands on.
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'workflow_dispatch' ||
+       github.event.sender.id == 874012)
     runs-on: [self-hosted, Linux, ARM64]
     container:
       image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
@@ -121,7 +244,17 @@ jobs:
 
   polish:
     needs: image
+    # Post-merge code only, and `ci.yml` triggers on `pull_request` alone, so
+    # this job never runs today. The condition is kept as-is rather than
+    # tidied into the same-repository guard the other seven carry: it is
+    # already the stricter of the two for the event it admits, and when a
+    # `push` trigger is added this job will pick up a push, which is post-merge
+    # code from a protected branch.
     if: github.event_name == 'push'
+    # The sender half of the trust rule does not apply to a post-merge push
+    # from a protected branch, so there is no trust-gate step here either. If
+    # this ever gains a trigger that a fork or an untrusted writer can fire,
+    # that is the change that makes it need one.
     runs-on: [self-hosted, Linux, ARM64]
     container:
       image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
@@ -138,6 +271,13 @@ jobs:
 
   chipdb:
     needs: image
+    # Same-repository pull requests only. See `build` above and the file
+    # header.
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'workflow_dispatch' ||
+       github.event.sender.id == 874012)
     runs-on: [self-hosted, Linux, ARM64]
     container:
       image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
@@ -158,6 +298,13 @@ jobs:
 
   boards:
     needs: image
+    # Same-repository pull requests only. See `build` above and the file
+    # header.
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'workflow_dispatch' ||
+       github.event.sender.id == 874012)
     runs-on: [self-hosted, Linux, ARM64]
     container:
       image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
@@ -188,6 +335,13 @@ jobs:
   # graph that already had one.
   pipeline:
     needs: image
+    # Same-repository pull requests only. See `build` above and the file
+    # header.
+    if: >-
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'workflow_dispatch' ||
+       github.event.sender.id == 874012)
     runs-on: [self-hosted, Linux, ARM64]
     container:
       image: ghcr.io/maxi-tools/rlvgl:${{ github.sha }}
@@ -208,3 +362,67 @@ jobs:
           target/debug/rlvgl-creator sync --out examples/assets-pack/out --manifest examples/assets-pack/manifest.yml
           target/debug/rlvgl-creator scaffold examples/assets-pack/crate --manifest examples/assets-pack/manifest.yml
           target/debug/rlvgl-creator vendor examples/assets-pack --out examples/assets-pack/out --allow MIT --manifest examples/assets-pack/manifest.yml
+
+  # Fork pull requests get the free hosted runners, per the fleet rule: a public
+  # repository expects fork contributions, and the answer to "untrusted code
+  # must not reach the ARM64 fleet" is a hosted lane rather than a closed door.
+  # Without this the guards above leave every outside contribution with no CI
+  # verdict at all, which is how a maintainer ends up reviewing a diff they
+  # never saw a build of.
+  #
+  # HOSTED, deliberately, and it is the whole design of this job. `ubuntu-latest`
+  # is a single-use VM that is destroyed when the job ends: it holds no cargo
+  # home, no sccache and no docker socket to steal, and it is billed to a public
+  # repository's free tier. Every job above is the opposite on all three counts.
+  #
+  # WHAT THIS LANE IS NOT: it is not a replacement for the seven jobs it stands
+  # in for. It cannot build the firmware (that is `thumbv7em-none-eabihf`, an
+  # embedded target with no hosted runner), and it does not run the creator
+  # pipeline or the vendor-database builds, which need the toolchain image those
+  # jobs build. It runs the two checks that need neither: the toolchain-free
+  # house-style gate, and the workflow trust-gate suite that keeps the guards
+  # above from rotting. A green here means "the parts that can run off-fleet
+  # pass", and the PR still needs a maintainer's review before merge -- which is
+  # the correct answer for a first-time contributor, not a workaround.
+  fork-checks:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Nothing here pushes, so the runner should not carry a credential
+          # into .git/config. A fork's token is read-only regardless; stating
+          # it keeps the lane auditable and stops it quietly widening.
+          persist-credentials: false
+
+      - name: Formatting
+        # `cargo fmt` needs no toolchain fetch and no submodules -- it reads the
+        # sources, so it works on a fork checkout where `scripts/setup-ci-env.sh`
+        # would be about to run a PR-controlled script. Deliberately the only
+        # `cargo` invocation here, and deliberately `fmt` rather than `clippy`
+        # or `build`: those compile and link PR-supplied build scripts.
+        run: cargo fmt --all -- --check
+
+      - name: Workflow trust-gate suite
+        # The guard suite, run on a fork's own workflow files, so a fork that
+        # removes a guard is told so by a check rather than by a maintainer
+        # reading a diff. Same property the guards above do not have: this runs
+        # AFTER checkout of the fork's tree, so it is a detector, not a
+        # boundary. That is the right division -- the boundary is the job-level
+        # `if:` on the seven fleet jobs, and this is how a regression in it gets
+        # noticed.
+        #
+        # PyYAML only, from the standard index, in a throwaway venv. The system
+        # python on a hosted runner has no yaml module and PEP 668 blocks a
+        # global install, so the venv is not ceremony -- it is the only
+        # arrangement that works.
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/fork-checks
+          /tmp/fork-checks/bin/pip install --quiet --disable-pip-version-check 'PyYAML==6.0.2'
+          /tmp/fork-checks/bin/python -m unittest discover -s tests -p 'test_workflow_trust_gate.py' -v
