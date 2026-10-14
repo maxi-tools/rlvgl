@@ -77,6 +77,11 @@ on:
   # nothing.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, labeled]
+  # Run the same unfiltered cheap sentinel for merge-queue candidates. Unlike
+  # push, this intentionally has no paths filter: the required check must exist
+  # even for a docs-only merge group.
+  merge_group:
+    types: [checks_requested]
 
 concurrency:
   group: qodana-${{ github.repository }}-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'interactive' }}
@@ -122,8 +127,9 @@ jobs:
     # admitted by construction and a trigger added to `on:` later cannot be
     # dropped by forgetting to extend a list.
     #
-    # The scope half keeps the sentinel on PR/push, which is what it is for:
-    # `schedule` and `workflow_dispatch` exist to run the full scan below.
+    # The scope half keeps the sentinel on PR/push plus admitted merge-queue
+    # groups (checks_requested); `schedule` and `workflow_dispatch` exist to
+    # run the full scan below.
     # Admitting them here would also run the degraded-mode merge gate on every
     # nightly, failing it whenever CI_DEGRADED_UNTIL is unset or expired even
     # though the requested scan succeeded, and burning another fleet runner to
@@ -134,7 +140,11 @@ jobs:
         github.event_name != 'pull_request' ||
         github.event.pull_request.head.repo.full_name == github.repository
       ) &&
-      (github.event_name == 'pull_request' || github.event_name == 'push')
+      (
+        github.event_name == 'pull_request' ||
+        github.event_name == 'push' ||
+        (github.event_name == 'merge_group' && github.event.action == 'checks_requested')
+      )
     runs-on: [self-hosted, Linux]
     timeout-minutes: 5
     permissions:
@@ -274,6 +284,7 @@ jobs:
         github.event_name == 'schedule' ||
         github.event_name == 'workflow_dispatch' ||
         (github.event_name != 'pull_request' &&
+         github.event_name != 'merge_group' &&
          vars.CI_ENFORCEMENT_MODE == 'strict') ||
         (github.event_name == 'pull_request' &&
          contains(github.event.pull_request.labels.*.name, 'run-qodana'))
@@ -370,13 +381,22 @@ jobs:
     # post-merge, `push` is post-merge, and `workflow_dispatch` is pinned to
     # the owner by the third conjunct of the `if:` above.
     #
-    # COST: a `run-qodana` pull request from anyone else, or on any action
-    # other than `synchronize`, now runs hosted. While the org's Actions
-    # allowance is exhausted that means the scan is refused before a runner is
-    # assigned rather than skipped quietly -- a worse-looking outcome for an
-    # opt-in advisory lane, and still the right trade against org credentials
-    # on a persistent runner.
-    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.sender.id == 874012 && github.event.action == 'synchronize' && github.event.pull_request.head.repo.full_name == github.repository)) && fromJSON(vars.QODANA_RUNS_ON || '["self-hosted","Linux","X64","container-runtime","disk-large"]') || 'ubuntu-latest' }}
+    # WHO MAY RUN ON THE FLEET. Aligned with the `if:` predicate (same-repo
+    # PR + non-Dependabot, or non-pull_request) rather than with the prior
+    # owner-synchronize check. The fork-guard is the safety property: a fork
+    # PR is blocked by the `if:` above, so the `runs-on` never sees one, and
+    # a same-repo PR is code from a write-access author -- which the
+    # `persist-credentials: false` checkout already accommodates. The prior
+    # owner-synchronize trade cost the org 12 qodana-full minutes on hosted
+    # runners to 11Z today (maxi-kvm + maxi-agent-runner, private-repo
+    # alarm 2026-10-13 11:45Z, t_f3544cc6); the policy is zero hosted
+    # minutes in private repos, and an advisory lane should not be the
+    # exception that outlives the policy.
+    #
+    # A `schedule` or `push` event on a non-same-repo ref is not a
+    # "fork" -- it is a branch the org owns. The full-repo nightly and the
+    # post-merge push both stay on the fleet.
+    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON(vars.QODANA_RUNS_ON || '["self-hosted","Linux","X64","container-runtime","disk-large"]') || 'ubuntu-latest' }}
     # 30 minutes, and that budget now buys analysis instead of a cache
     # round-trip. maxi-core#3862 read a cancelled run as the Qodana Cloud
     # publish overrunning the wall. The log says otherwise: on maxi-core run
